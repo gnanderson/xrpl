@@ -60,7 +60,7 @@ func TestPeersUnmarshal(t *testing.T) {
 func TestVersionCompare(t *testing.T) {
 	compare := semver.Must(semver.NewVersion("1.2.2"))
 
-	if !versionTooOld(currentVer, compare) {
+	if !versionTooOld(compare) {
 		t.Fail()
 	}
 }
@@ -80,9 +80,8 @@ func TestPeersGetUnstable(t *testing.T) {
 
 func TestVersionTooOld(t *testing.T) {
 	compare := semver.New("1.1.3")
-	current := semver.New("1.2.4")
 
-	if !versionTooOld(current, compare) {
-		t.Fatalf("A (%s) is not less than B (%s)", compare, current)
+	if !versionTooOld(compare) {
+		t.Fatalf("A (%s) is not less than B (%s)", compare, currentVer)
 	}
 }

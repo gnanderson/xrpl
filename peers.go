@@ -68,22 +68,22 @@ func (p Peer) IP() net.IP {
 }
 
 // StableWith checks the stability of a node with a StabilityChecker
-func (p Peer) StableWith(checker StabilityChecker) bool {
+func (p *Peer) StableWith(checker StabilityChecker) bool {
 	return checker.Check(p)
 }
 
 // SemVer returns the semantic version of the node software, if the version string
 // is unrecognised e.g. not 'rippled-x.x.x' it returns a nil version and error
-func (p Peer) SemVer() (*semver.Version, error) {
+func (p *Peer) SemVer() (*semver.Version, error) {
 	v := strings.TrimLeft(p.Version, "rippled-")
 
 	return semver.NewVersion(v)
 }
 
-func versionTooOld(current, compare *semver.Version) bool {
-	if compare.LessThan(*current) {
-		compare.BumpPatch()
-		return compare.LessThan(*current)
+func versionTooOld(version *semver.Version) bool {
+	if version.LessThan(*currentVer) {
+		version.BumpPatch()
+		return version.LessThan(*currentVer)
 	}
 
 	return false
@@ -92,7 +92,7 @@ func versionTooOld(current, compare *semver.Version) bool {
 // StabilityChecker is the interface that a peer can consumer to check the
 // stability of a peer against some custom rules.
 type StabilityChecker interface {
-	Check(peer Peer) bool
+	Check(peer *Peer) bool
 }
 
 // PeerList represents the output from the 'peers' admin commnad
@@ -141,19 +141,24 @@ func (pl *PeerList) Unstable() []*Peer {
 // sanity field, the version and the connected uptime. This checker returns
 // true only if the peer is sane, is a recent version of rippled, and has
 // been connected long enough to decide on it's sanity.
-func (pl *PeerList) Check(p Peer) bool {
+func (pl *PeerList) Check(p *Peer) bool {
 	peerVer, err := p.SemVer()
 	if err != nil {
 		log.Println("peer version:", err)
 		return false
 	}
 
+	// always punt peers which are more than once patch version behing
+	if versionTooOld(peerVer) {
+		p.Sanity = "old"
+		return false
+	}
+
 	minCheckAge := 30 * time.Minute
 	checkPeer := p.Uptime > int(minCheckAge.Seconds())
-	sane := p.Sanity != unstable && p.Sanity != insane
 
 	if checkPeer {
-		return sane && !versionTooOld(currentVer, peerVer)
+		return p.Sanity != unstable && p.Sanity != insane
 	}
 
 	return true
