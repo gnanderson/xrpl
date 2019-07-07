@@ -10,7 +10,7 @@ import (
 )
 
 func peerList() *PeerList {
-	f, err := os.Open("peers.json")
+	f, err := os.Open("peers_anon.json")
 	defer f.Close()
 	if err != nil {
 		log.Fatal(err)
@@ -49,8 +49,8 @@ func TestPeersGetUnstable(t *testing.T) {
 		}
 	}
 
-	if len(pl.Unstable()) < 6 {
-		t.Fatal("not enough unstable peers found from test data")
+	if len(pl.Unstable()) < 3 {
+		t.Fatalf("expected %d unstable peers, got %d", 3, len(pl.Unstable()))
 	}
 }
 

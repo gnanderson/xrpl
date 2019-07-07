@@ -3,6 +3,8 @@ package xrpl
 import (
 	"context"
 	"encoding/json"
+	"fmt"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -22,17 +24,20 @@ func commandTester(tester cmdTester, t *testing.T) http.HandlerFunc {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		c, err := upgrader.Upgrade(w, r, nil)
 		if err != nil {
+			fmt.Println(err)
 			return
 		}
 		defer c.Close()
 		for {
 			mt, message, err := c.ReadMessage()
 			if err != nil {
+				fmt.Println(err)
 				break
 			}
 			tested := tester.Test(t, mt, message)
 			err = c.WriteMessage(mt, tested.JSON())
 			if err != nil {
+				fmt.Println(err)
 				break
 			}
 		}
@@ -97,8 +102,12 @@ func TestRepeatCommandTicker(t *testing.T) {
 	tester := &tickerTester{received: 0}
 	s := httptest.NewServer(commandTester(tester, t))
 	defer s.Close()
+	host, port, err := net.SplitHostPort(strings.TrimPrefix(s.URL, "http://"))
+	if err != nil {
+		t.Fatal(err)
+	}
 
-	node := &Node{Addr: strings.TrimPrefix(s.URL, "http://")}
+	node := NewNode(host, port, false)
 
 	peerCmd := NewPeerCommand()
 

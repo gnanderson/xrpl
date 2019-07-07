@@ -33,10 +33,10 @@ func (n *Node) connect() *websocket.Conn {
 	log.Printf("websocket connect: %s", url.String())
 
 	c, _, err := websocket.DefaultDialer.Dial(url.String(), nil)
-	log.Printf("websocket connected...")
 	if err != nil {
 		log.Fatal("websocket dial:", err)
 	}
+	log.Printf("websocket connected...")
 
 	return c
 }
