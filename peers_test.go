@@ -57,6 +57,14 @@ func TestPeersUnmarshal(t *testing.T) {
 	}
 }
 
+func TestVersionCompare(t *testing.T) {
+	compare := semver.Must(semver.NewVersion("1.2.2"))
+
+	if !versionTooOld(currentVer, compare) {
+		t.Fail()
+	}
+}
+
 func TestPeersGetUnstable(t *testing.T) {
 	pl := peerList()
 	for _, peer := range pl.Unstable() {
