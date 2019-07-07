@@ -104,33 +104,21 @@ func TestRepeatCommandTicker(t *testing.T) {
 
 	ctx, cancel := context.WithCancel(context.Background())
 
-	timeout := time.After(4 * time.Second)
-	poll := time.Millisecond * 500
+	timeout := time.After(4500 * time.Millisecond)
 	messages := node.RepeatCommand(ctx, peerCmd, 1)
-	defer close(messages)
 
-	go func() {
-		for {
-			select {
-			case <-timeout:
-				cancel()
-			case m := <-messages:
-				if m != nil {
-					t.Log(string(m.Msg))
-				}
-			case <-ctx.Done():
-				return
-			default:
-				t.Log("polling...")
+	for {
+		select {
+		case <-timeout:
+			cancel()
+			if tester.received != 4 {
+				t.Fatalf("expected 4 ticks, got %d", tester.received)
 			}
-			time.Sleep(poll)
-		}
-	}()
-
-	select {
-	case <-ctx.Done():
-		if tester.received != 4 {
-			t.Fatalf("expected 4 ticks, got %d", tester.received)
+			return
+		case m := <-messages:
+			if m != nil {
+				t.Log(string(m.Msg))
+			}
 		}
 	}
 }

@@ -21,7 +21,7 @@ func peerList() *PeerList {
 		log.Fatal(err)
 	}
 
-	peerList, err := unmarshalPeers(string(bytes))
+	peerList, err := UnmarshalPeers(string(bytes))
 	if err != nil {
 		log.Fatal(err)
 	}

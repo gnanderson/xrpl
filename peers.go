@@ -2,8 +2,12 @@ package xrpl
 
 import (
 	"encoding/json"
+	"fmt"
 	"log"
+	"math/rand"
 	"net"
+	"os"
+	"strconv"
 	"strings"
 	"time"
 
@@ -16,7 +20,10 @@ const (
 )
 
 var currentVer = semver.Must(semver.NewVersion("1.2.4"))
-var prevMaxVer = semver.Must(semver.NewVersion("1.1.3"))
+
+// DefaultStabilityChecker is the packages own opintionated check function for use
+// with a peers StableWith method.
+var DefaultStabilityChecker = &PeerList{}
 
 // Peer defines a validator/stock peer node
 type Peer struct {
@@ -50,14 +57,13 @@ func (p Peer) StableWith(checker StabilityChecker) bool {
 }
 
 // SemVer returns the semantic version of the node software, if the version string
-// is unrecognised e.g. not 'rippled-X' it returns a nil version and error
+// is unrecognised e.g. not 'rippled-x.x.x' it returns a nil version and error
 func (p Peer) SemVer() (*semver.Version, error) {
 	v := strings.TrimLeft(p.Version, "rippled-")
 
 	return semver.NewVersion(v)
 }
 
-// only accept versions that are one patch behind
 func versionTooOld(current, compare *semver.Version) bool {
 	if compare.LessThan(*current) {
 		compare.BumpPatch()
@@ -76,27 +82,27 @@ type StabilityChecker interface {
 // PeerList represents the output from the 'peers' admin commnad
 type PeerList struct {
 	Result struct {
-		Peers  []Peer `json:"peers"`
-		Status string `json:"status"`
+		Peers  []*Peer `json:"peers"`
+		Status string  `json:"status"`
 	} `json:"result"`
 }
 
 // Peers returns the list of conntected peers in the peer list
-func (pl *PeerList) Peers() []Peer {
+func (pl *PeerList) Peers() []*Peer {
 	return pl.Result.Peers
 }
 
 // Stable returns a list of peers that are not reporting unknown or insane
 // values. If you need to examine the state further you can use custom stability
 // rules using the Peer.StableWith() method
-func (pl *PeerList) Stable() []Peer {
-	braw := make([]Peer, 0)
+func (pl *PeerList) Stable() []*Peer {
+	braw := make([]*Peer, 0)
 	for _, peer := range pl.Peers() {
-		// if peer sanity is the zero value
 		if peer.Sanity == "" {
 			braw = append(braw, peer)
 		}
 	}
+
 	return braw
 }
 
@@ -104,8 +110,8 @@ func (pl *PeerList) Stable() []Peer {
 // further check individual peers for uptime and/or old rippled versions
 // before you take action. You can use the Peer.StableWith() method to test the
 // peer further.
-func (pl *PeerList) Unstable() []Peer {
-	b0rked := make([]Peer, 0)
+func (pl *PeerList) Unstable() []*Peer {
+	b0rked := make([]*Peer, 0)
 	for _, peer := range pl.Peers() {
 		if peer.Sanity == unstable || peer.Sanity == insane {
 			b0rked = append(b0rked, peer)
@@ -116,28 +122,53 @@ func (pl *PeerList) Unstable() []Peer {
 }
 
 // Check is an opinionated view of the peers stability based on the reported
-// sanity field, the version and the connected uptime.
+// sanity field, the version and the connected uptime. This checker returns
+// true only if the peer is sane, is a recent version of rippled, and has
+// been connected long enough to decide on it's sanity.
 func (pl *PeerList) Check(p Peer) bool {
-	sane := p.Sanity != unstable && p.Sanity != insane
 	peerVer, err := p.SemVer()
-	maxAge := 30 * time.Minute
-	isPastMaxAge := p.Uptime > int(maxAge.Seconds())
-
 	if err != nil {
-		log.Fatal(err)
+		log.Println("peer version:", err)
+		return false
 	}
 
-	switch {
-	case !sane && isPastMaxAge:
-		return false
-	case sane && versionTooOld(currentVer, peerVer):
-		return false
+	minCheckAge := 30 * time.Minute
+	checkPeer := p.Uptime > int(minCheckAge.Seconds())
+	sane := p.Sanity != unstable && p.Sanity != insane
+
+	if checkPeer {
+		return sane && !versionTooOld(currentVer, peerVer)
 	}
 
 	return true
 }
 
-func unmarshalPeers(peerList string) (*PeerList, error) {
+// Anonymise (randomise) the IP's of a peerlist - for testing / CI purposes...
+// public keys are obviously in the public domain but lets be polite about the IP's
+func (pl *PeerList) Anonymise() {
+	rand := rand.New(rand.NewSource(time.Now().UnixNano()))
+	for _, peer := range pl.Peers() {
+		blocks := []string{}
+		for i := 0; i < 4; i++ {
+			number := rand.Intn(255)
+			blocks = append(blocks, strconv.Itoa(number))
+		}
+
+		addr := fmt.Sprintf("%s:%d", strings.Join(blocks, "."), rand.Intn(60000))
+		peer.Address = addr
+	}
+
+	enc := json.NewEncoder(os.Stdout)
+	enc.SetIndent("", "  ")
+
+	if err := enc.Encode(pl); err != nil {
+		fmt.Println(err)
+	}
+}
+
+// UnmarshalPeers is a convenience function to marshal a JSON peer list into
+// a *PeerList
+func UnmarshalPeers(peerList string) (*PeerList, error) {
 	list := &PeerList{}
 	err := json.Unmarshal([]byte(peerList), list)
 

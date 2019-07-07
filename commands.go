@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"log"
+	"net"
 	"net/url"
 	"time"
 
@@ -13,11 +14,31 @@ import (
 // Node is an XRPL proxy or validator node
 type Node struct {
 	Addr string
+	Port string
+	tls  bool
 }
 
 // NewNode creates a new XRPL node representation
-func NewNode(addr string) *Node {
-	return &Node{Addr: addr}
+func NewNode(addr, port string, tls bool) *Node {
+	return &Node{Addr: addr, Port: port, tls: tls}
+}
+
+func (n *Node) connect() *websocket.Conn {
+	scheme := "ws"
+	if n.tls {
+		scheme = "wss"
+	}
+
+	url := url.URL{Scheme: scheme, Host: net.JoinHostPort(n.Addr, n.Port)}
+	log.Printf("websocket connect: %s", url.String())
+
+	c, _, err := websocket.DefaultDialer.Dial(url.String(), nil)
+	log.Printf("websocket connected...")
+	if err != nil {
+		log.Fatal("websocket dial:", err)
+	}
+
+	return c
 }
 
 // RepeatCommand dials the ws/wss RPC endpoint for admin commands then repeats
@@ -25,18 +46,14 @@ func NewNode(addr string) *Node {
 func (n *Node) RepeatCommand(ctx context.Context, cmd RPCCommand, repeat int) chan *WsMessage {
 	messages := make(chan *WsMessage)
 
-	url := url.URL{Scheme: "ws", Host: n.Addr}
-	log.Printf("websocket connect: %s", url.String())
-
-	c, _, err := websocket.DefaultDialer.Dial(url.String(), nil)
-	if err != nil {
-		log.Fatal("websocket dial:", err)
-	}
+	c := n.connect()
 
 	go func() {
 		for {
 			select {
 			case <-ctx.Done():
+				log.Println("reader exiting")
+				close(messages)
 				return
 			default:
 				msgType, message, err := c.ReadMessage()
@@ -54,7 +71,7 @@ func (n *Node) RepeatCommand(ctx context.Context, cmd RPCCommand, repeat int) ch
 		for {
 			select {
 			case <-ctx.Done():
-				// try to cleanly close the ws conn
+				log.Println("websocket close")
 				err := c.WriteMessage(
 					websocket.CloseMessage,
 					websocket.FormatCloseMessage(websocket.CloseNormalClosure, ""),
@@ -80,6 +97,40 @@ func (n *Node) RepeatCommand(ctx context.Context, cmd RPCCommand, repeat int) ch
 	return messages
 }
 
+// DoCommand runs a single command
+func (n *Node) DoCommand(cmd RPCCommand) *WsMessage {
+
+	c := n.connect()
+
+	go func() {
+		err := c.WriteMessage(websocket.TextMessage, cmd.JSON())
+		if err != nil {
+			log.Println("websocket write:", err)
+			return
+		}
+	}()
+
+	msgType, message, err := c.ReadMessage()
+	if err != nil {
+		log.Println("websocket read:", err)
+	}
+
+	err = c.WriteMessage(
+		websocket.CloseMessage,
+		websocket.FormatCloseMessage(websocket.CloseNormalClosure, ""),
+	)
+	if err != nil {
+		log.Println("websocket close:", err)
+		return nil
+	}
+
+	select {
+	case <-time.After(time.Millisecond * 200):
+	}
+
+	return &WsMessage{MsgType: msgType, Msg: message, Err: err}
+}
+
 // WsMessage encapsulates a websocket txt/binary message
 type WsMessage struct {
 	MsgType int
@@ -95,8 +146,8 @@ type RPCCommand interface {
 // Command is a rippled admin command
 type Command struct {
 	Command       string `json:"command"`
-	AdminUser     string `json:"admin_user"`
-	AdminPassword string `json:"admin_password"`
+	AdminUser     string `json:"admin_user,omitempty"`
+	AdminPassword string `json:"admin_password,omitempty"`
 }
 
 // Name returns the commands string name e.g. "peers"
