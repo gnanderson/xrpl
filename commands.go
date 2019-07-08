@@ -118,13 +118,11 @@ func (n *Node) DoCommand(cmd RPCCommand) *WsMessage {
 
 	c := n.connect()
 
-	go func() {
-		err := c.WriteMessage(websocket.TextMessage, cmd.JSON())
-		if err != nil {
-			log.Println("websocket write:", err)
-			return
-		}
-	}()
+	err := c.WriteMessage(websocket.TextMessage, cmd.JSON())
+	if err != nil {
+		log.Println("websocket write:", err)
+		return nil
+	}
 
 	msgType, message, err := c.ReadMessage()
 	if err != nil {
