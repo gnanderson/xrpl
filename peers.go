@@ -23,6 +23,7 @@ import (
 	"math/rand"
 	"net"
 	"os"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -105,7 +106,12 @@ type PeerList struct {
 
 // Peers returns the list of conntected peers in the peer list
 func (pl *PeerList) Peers() []*Peer {
-	return pl.Result.Peers
+	p := pl.Result.Peers
+	sort.Slice(p, func(i, j int) bool {
+		return p[i].Uptime < p[j].Uptime
+	})
+
+	return p
 }
 
 // Stable returns a list of peers that are not reporting unknown or insane
