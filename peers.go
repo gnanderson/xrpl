@@ -36,7 +36,9 @@ const (
 	insane   = "insane"
 )
 
-var currentVer = semver.Must(semver.NewVersion("1.2.4"))
+// another opinion but we'll add a flag for this at some point - give some grace
+// for operators to upgrade their nodes.
+var minVersion = semver.Must(semver.NewVersion("1.2.3"))
 
 // DefaultStabilityChecker is the packages own opintionated check function for use
 // with a peers StableWith method.
@@ -81,23 +83,13 @@ func (p *Peer) SemVer() (*semver.Version, error) {
 	return semver.NewVersion(v)
 }
 
-// IsOld reports if the version is too far behind opinionated acceptence
-func (p *Peer) IsOld() bool {
-	ver, err := p.SemVer()
-	if err != nil {
-		return true
+// TooOld reports if the version is too far behind opinionated acceptence
+func (p *Peer) TooOld() bool {
+	if pVersion, err := p.SemVer(); err == nil {
+		return pVersion.LessThan(*minVersion)
 	}
 
-	return versionTooOld(ver)
-}
-
-func versionTooOld(version *semver.Version) bool {
-	if version.LessThan(*currentVer) {
-		version.BumpPatch()
-		return version.LessThan(*currentVer)
-	}
-
-	return false
+	return true
 }
 
 // StabilityChecker is the interface that a peer can consumer to check the
@@ -158,14 +150,7 @@ func (pl *PeerList) Unstable() []*Peer {
 // true only if the peer is sane, is a recent version of rippled, and has
 // been connected long enough to decide on it's sanity.
 func (pl *PeerList) Check(p *Peer) bool {
-	peerVer, err := p.SemVer()
-	if err != nil {
-		log.Println("peer version:", err)
-		return false
-	}
-
-	// always punt peers which are more than once patch version behing
-	if versionTooOld(peerVer) {
+	if p.TooOld() {
 		p.Sanity = "old"
 		return false
 	}

@@ -57,14 +57,6 @@ func TestPeersUnmarshal(t *testing.T) {
 	}
 }
 
-func TestVersionCompare(t *testing.T) {
-	compare := semver.Must(semver.NewVersion("1.2.2"))
-
-	if !versionTooOld(compare) {
-		t.Fail()
-	}
-}
-
 func TestPeersGetUnstable(t *testing.T) {
 	pl := peerList()
 	for _, peer := range pl.Unstable() {
@@ -78,10 +70,32 @@ func TestPeersGetUnstable(t *testing.T) {
 	}
 }
 
-func TestVersionTooOld(t *testing.T) {
-	compare := semver.New("1.1.3")
+var verTests = []struct {
+	min      string
+	compare  string
+	expected bool
+}{
+	{"1.2.4", "1.2.3", true},
+	{"1.2.4", "1.3.0", false},
+	{"1.2.4", "1.2.4-beta1", true},
+	{"1.2.4", "1.3.0-rc1", false},
+}
 
-	if !versionTooOld(compare) {
-		t.Fatalf("A (%s) is not less than B (%s)", compare, currentVer)
+func TestVersions(t *testing.T) {
+	tf := func(min, compare string, expected bool) {
+		minVersion = semver.Must(semver.NewVersion(min))
+
+		compareP := &Peer{Version: compare}
+		lessThan := compareP.TooOld()
+
+		if lessThan != expected {
+			t.Errorf("Version problem - min: '%s' compare:  %s lessthan: %t", min, compare, lessThan)
+		}
+	}
+
+	for _, tt := range verTests {
+		t.Run(tt.min, func(t *testing.T) {
+			tf(tt.min, tt.compare, tt.expected)
+		})
 	}
 }
