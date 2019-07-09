@@ -107,7 +107,6 @@ func (n *Node) RepeatCommand(ctx context.Context, cmd RPCCommand, repeat int) ch
 				}
 				return
 			case <-ticker.C:
-				log.Println("websocket write")
 				err := c.WriteMessage(websocket.TextMessage, cmd.JSON())
 				if err != nil {
 					log.Println("websocket write:", err)
@@ -124,7 +123,7 @@ func (n *Node) RepeatCommand(ctx context.Context, cmd RPCCommand, repeat int) ch
 func (n *Node) DoCommand(cmd RPCCommand) *WsMessage {
 
 	c, err := n.connect()
-	if c != nil {
+	if err != nil {
 		return &WsMessage{Err: err}
 	}
 
