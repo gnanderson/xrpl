@@ -39,7 +39,7 @@ func NewNode(addr, port string, tls bool) *Node {
 	return &Node{Addr: addr, Port: port, tls: tls}
 }
 
-func (n *Node) connect() *websocket.Conn {
+func (n *Node) connect() (*websocket.Conn, error) {
 	scheme := "ws"
 	if n.tls {
 		scheme = "wss"
@@ -50,11 +50,13 @@ func (n *Node) connect() *websocket.Conn {
 
 	c, _, err := websocket.DefaultDialer.Dial(url.String(), nil)
 	if err != nil {
-		log.Fatal("websocket dial:", err)
+		log.Println("websocket dial:", err)
+		return nil, err
 	}
+
 	log.Printf("websocket connected...")
 
-	return c
+	return c, nil
 }
 
 // RepeatCommand dials the ws/wss RPC endpoint for admin commands then repeats
@@ -62,7 +64,11 @@ func (n *Node) connect() *websocket.Conn {
 func (n *Node) RepeatCommand(ctx context.Context, cmd RPCCommand, repeat int) chan *WsMessage {
 	messages := make(chan *WsMessage)
 
-	c := n.connect()
+	c, err := n.connect()
+	if err != nil {
+		messages <- &WsMessage{Err: err}
+		return messages
+	}
 
 	go func() {
 		for {
@@ -101,6 +107,7 @@ func (n *Node) RepeatCommand(ctx context.Context, cmd RPCCommand, repeat int) ch
 				}
 				return
 			case <-ticker.C:
+				log.Println("websocket write")
 				err := c.WriteMessage(websocket.TextMessage, cmd.JSON())
 				if err != nil {
 					log.Println("websocket write:", err)
@@ -116,9 +123,12 @@ func (n *Node) RepeatCommand(ctx context.Context, cmd RPCCommand, repeat int) ch
 // DoCommand runs a single command
 func (n *Node) DoCommand(cmd RPCCommand) *WsMessage {
 
-	c := n.connect()
+	c, err := n.connect()
+	if c != nil {
+		return &WsMessage{Err: err}
+	}
 
-	err := c.WriteMessage(websocket.TextMessage, cmd.JSON())
+	err = c.WriteMessage(websocket.TextMessage, cmd.JSON())
 	if err != nil {
 		log.Println("websocket write:", err)
 		return nil

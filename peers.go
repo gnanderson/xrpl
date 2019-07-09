@@ -81,6 +81,16 @@ func (p *Peer) SemVer() (*semver.Version, error) {
 	return semver.NewVersion(v)
 }
 
+// IsOld reports if the version is too far behind opinionated acceptence
+func (p *Peer) IsOld() bool {
+	ver, err := p.SemVer()
+	if err != nil {
+		return true
+	}
+
+	return versionTooOld(ver)
+}
+
 func versionTooOld(version *semver.Version) bool {
 	if version.LessThan(*currentVer) {
 		version.BumpPatch()
