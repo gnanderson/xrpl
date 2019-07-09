@@ -83,7 +83,7 @@ var verTests = []struct {
 
 func TestVersions(t *testing.T) {
 	tf := func(min, compare string, expected bool) {
-		minVersion = semver.Must(semver.NewVersion(min))
+		MinVersion = semver.Must(semver.NewVersion(min))
 
 		compareP := &Peer{Version: compare}
 		lessThan := compareP.TooOld()

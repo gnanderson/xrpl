@@ -31,14 +31,16 @@ import (
 	"github.com/coreos/go-semver/semver"
 )
 
+// These constants define the stability nature of an XRPL peer
 const (
-	unstable = "unknown"
-	insane   = "insane"
+	Good     = "good"    // our defintiion
+	Old      = "old"     // our definition
+	Unstable = "unknown" // from the ledger data
+	Insane   = "insane"  // from the ledger data
 )
 
-// another opinion but we'll add a flag for this at some point - give some grace
-// for operators to upgrade their nodes.
-var minVersion = semver.Must(semver.NewVersion("1.2.3"))
+// MinVersion is another opinion but it can be set at runtime...
+var MinVersion = semver.Must(semver.NewVersion("1.2.3"))
 
 // DefaultStabilityChecker is the packages own opintionated check function for use
 // with a peers StableWith method.
@@ -86,7 +88,7 @@ func (p *Peer) SemVer() (*semver.Version, error) {
 // TooOld reports if the version is too far behind opinionated acceptence
 func (p *Peer) TooOld() bool {
 	if pVersion, err := p.SemVer(); err == nil {
-		return pVersion.LessThan(*minVersion)
+		return pVersion.LessThan(*MinVersion)
 	}
 
 	return true
@@ -137,7 +139,7 @@ func (pl *PeerList) Stable() []*Peer {
 func (pl *PeerList) Unstable() []*Peer {
 	b0rked := make([]*Peer, 0)
 	for _, peer := range pl.Peers() {
-		if peer.Sanity == unstable || peer.Sanity == insane {
+		if peer.Sanity == Unstable || peer.Sanity == Insane {
 			b0rked = append(b0rked, peer)
 		}
 	}
@@ -151,7 +153,7 @@ func (pl *PeerList) Unstable() []*Peer {
 // been connected long enough to decide on it's sanity.
 func (pl *PeerList) Check(p *Peer) bool {
 	if p.TooOld() {
-		p.Sanity = "old"
+		p.Sanity = Old
 		return false
 	}
 
@@ -159,7 +161,7 @@ func (pl *PeerList) Check(p *Peer) bool {
 	checkPeer := p.Uptime > int(minCheckAge.Seconds())
 
 	if checkPeer {
-		return p.Sanity != unstable && p.Sanity != insane
+		return p.Sanity != Unstable && p.Sanity != Insane
 	}
 
 	return true
