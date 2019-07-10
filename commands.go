@@ -21,10 +21,12 @@ import (
 	"encoding/json"
 	"log"
 	"net"
+	"net/http"
 	"net/url"
 	"time"
 
 	"github.com/gorilla/websocket"
+	ws "github.com/maurodelazeri/gorilla-reconnect"
 )
 
 // Node is an XRPL proxy or validator node
@@ -39,24 +41,17 @@ func NewNode(addr, port string, tls bool) *Node {
 	return &Node{Addr: addr, Port: port, tls: tls}
 }
 
-func (n *Node) connect() (*websocket.Conn, error) {
+func (n *Node) connect() *ws.RecConn {
 	scheme := "ws"
 	if n.tls {
 		scheme = "wss"
 	}
-
 	url := url.URL{Scheme: scheme, Host: net.JoinHostPort(n.Addr, n.Port)}
-	log.Printf("websocket connect: %s", url.String())
 
-	c, _, err := websocket.DefaultDialer.Dial(url.String(), nil)
-	if err != nil {
-		log.Println("websocket dial:", err)
-		return nil, err
-	}
+	conn := &ws.RecConn{}
+	conn.Dial(url.String(), make(http.Header))
 
-	log.Printf("websocket connected...")
-
-	return c, nil
+	return conn
 }
 
 // RepeatCommand dials the ws/wss RPC endpoint for admin commands then repeats
@@ -64,23 +59,19 @@ func (n *Node) connect() (*websocket.Conn, error) {
 func (n *Node) RepeatCommand(ctx context.Context, cmd RPCCommand, repeat int) chan *WsMessage {
 	messages := make(chan *WsMessage)
 
-	c, err := n.connect()
-	if err != nil {
-		messages <- &WsMessage{Err: err}
-		return messages
-	}
+	c := n.connect()
 
 	go func() {
 		for {
 			select {
 			case <-ctx.Done():
-				log.Println("reader exiting")
+				log.Println("command: response reader exiting")
 				close(messages)
 				return
 			default:
 				msgType, message, err := c.ReadMessage()
 				if err != nil {
-					log.Println("websocket read:", err)
+					log.Println("command: websocket read:", err)
 				}
 				messages <- &WsMessage{MsgType: msgType, Msg: message, Err: err}
 			}
@@ -93,13 +84,13 @@ func (n *Node) RepeatCommand(ctx context.Context, cmd RPCCommand, repeat int) ch
 		for {
 			select {
 			case <-ctx.Done():
-				log.Println("websocket close")
+				log.Println("command: websocket close")
 				err := c.WriteMessage(
 					websocket.CloseMessage,
 					websocket.FormatCloseMessage(websocket.CloseNormalClosure, ""),
 				)
 				if err != nil {
-					log.Println("websocket close:", err)
+					log.Println("command: websocket close:", err)
 					return
 				}
 				select {
@@ -109,8 +100,7 @@ func (n *Node) RepeatCommand(ctx context.Context, cmd RPCCommand, repeat int) ch
 			case <-ticker.C:
 				err := c.WriteMessage(websocket.TextMessage, cmd.JSON())
 				if err != nil {
-					log.Println("websocket write:", err)
-					return
+					log.Println("command: websocker write:", err)
 				}
 			}
 		}
@@ -122,20 +112,17 @@ func (n *Node) RepeatCommand(ctx context.Context, cmd RPCCommand, repeat int) ch
 // DoCommand runs a single command
 func (n *Node) DoCommand(cmd RPCCommand) *WsMessage {
 
-	c, err := n.connect()
-	if err != nil {
-		return &WsMessage{Err: err}
-	}
+	c := n.connect()
 
-	err = c.WriteMessage(websocket.TextMessage, cmd.JSON())
+	err := c.WriteMessage(websocket.TextMessage, cmd.JSON())
 	if err != nil {
-		log.Println("websocket write:", err)
+		log.Println("command: websocket write:", err)
 		return nil
 	}
 
 	msgType, message, err := c.ReadMessage()
 	if err != nil {
-		log.Println("websocket read:", err)
+		log.Println("command: websocket read:", err)
 	}
 
 	err = c.WriteMessage(
@@ -143,7 +130,7 @@ func (n *Node) DoCommand(cmd RPCCommand) *WsMessage {
 		websocket.FormatCloseMessage(websocket.CloseNormalClosure, ""),
 	)
 	if err != nil {
-		log.Println("websocket close:", err)
+		log.Println("command: websocket close:", err)
 		return nil
 	}
 

@@ -129,6 +129,7 @@ func TestRepeatCommandTicker(t *testing.T) {
 
 	ctx, cancel := context.WithCancel(context.Background())
 
+	// ws reconnect waits 2s for handshake, cater for that
 	timeout := time.After(4500 * time.Millisecond)
 	messages := node.RepeatCommand(ctx, peerCmd, 1)
 
@@ -136,8 +137,8 @@ func TestRepeatCommandTicker(t *testing.T) {
 		select {
 		case <-timeout:
 			cancel()
-			if tester.received != 4 {
-				t.Fatalf("expected 4 ticks, got %d", tester.received)
+			if tester.received != 2 {
+				t.Fatalf("expected 2 ticks, got %d", tester.received)
 			}
 			return
 		case m := <-messages:
