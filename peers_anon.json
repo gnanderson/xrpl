@@ -98,7 +98,7 @@
         "load": 208,
         "public_key": "n9MTt3sc8jKVeMn6aqgE67hbSbaXHP5X5Mf6Ckv8MCvdKW6Jv9Bs",
         "uptime": 5056,
-        "version": "rippled-1.2.2"
+        "version": "rippled-1.2.3"
       },
       {
         "address": "140.240.72.253:10368",
