@@ -40,7 +40,7 @@ const (
 )
 
 // MinVersion is another opinion but it can be set at runtime...
-var MinVersion = semver.Must(semver.NewVersion("1.2.3"))
+var MinVersion = semver.Must(semver.NewVersion("1.2.4"))
 
 // DefaultStabilityChecker is the packages own opintionated check function for use
 // with a peers StableWith method.
