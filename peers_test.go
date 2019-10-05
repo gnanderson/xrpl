@@ -27,10 +27,10 @@ import (
 
 func peerList() *PeerList {
 	f, err := os.Open("peers_anon.json")
-	defer f.Close()
 	if err != nil {
 		log.Fatal(err)
 	}
+	defer f.Close()
 
 	bytes, err := ioutil.ReadAll(f)
 	if err != nil {

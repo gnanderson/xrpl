@@ -93,9 +93,7 @@ func (n *Node) RepeatCommand(ctx context.Context, cmd RPCCommand, repeat int) ch
 					log.Println("command: websocket close:", err)
 					return
 				}
-				select {
-				case <-time.After(time.Millisecond * 500):
-				}
+				<-time.After(time.Millisecond * 500)
 				return
 			case <-ticker.C:
 				err := c.WriteMessage(websocket.TextMessage, cmd.JSON())
@@ -134,9 +132,7 @@ func (n *Node) DoCommand(cmd RPCCommand) *WsMessage {
 		return nil
 	}
 
-	select {
-	case <-time.After(time.Millisecond * 200):
-	}
+	<-time.After(time.Millisecond * 200)
 
 	return &WsMessage{MsgType: msgType, Msg: message, Err: err}
 }
